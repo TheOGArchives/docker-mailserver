@@ -13,7 +13,7 @@ function teardown() { _default_teardown ; }
 # Similar to BATS `setup()` method, but invoked manually after
 # CONTAINER_NAME has been adjusted for the running testcase.
 function _initial_setup() {
-  init_with_defaults
+  _init_with_defaults
 
   # Prepare certificates in the letsencrypt supported file structure:
   # NOTE: Certbot uses `privkey.pem`.
@@ -40,7 +40,7 @@ function _initial_setup() {
     --env PERMIT_DOCKER='container'
     --env SSL_TYPE='letsencrypt'
   )
-  common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
+  _common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
 
   # Test that certificate files exist for the configured `hostname`:
   _should_have_valid_config "${TARGET_DOMAIN}" 'privkey.pem' 'fullchain.pem'
@@ -60,7 +60,7 @@ function _initial_setup() {
     --env PERMIT_DOCKER='container'
     --env SSL_TYPE='letsencrypt'
   )
-  common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
+  _common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
 
   #test domain has certificate files
   _should_have_valid_config "${TARGET_DOMAIN}" 'privkey.pem' 'fullchain.pem'
@@ -101,11 +101,11 @@ function _initial_setup() {
       --env SSL_DOMAIN='*.example.test'
       --env SSL_TYPE='letsencrypt'
     )
-    common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
-    wait_for_service "${CONTAINER_NAME}" 'changedetector'
+    _common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
+    _wait_for_service "${CONTAINER_NAME}" 'changedetector'
 
     # Wait until the changedetector service startup delay is over:
-    repeat_until_success_or_timeout 20 sh -c "$(_get_service_logs 'changedetector') | grep 'Changedetector is ready'"
+    _repeat_until_success_or_timeout 20 sh -c "$(_get_service_logs 'changedetector') | grep 'Changedetector is ready'"
   }
 
   # Test `acme.json` extraction works at container startup:
@@ -186,7 +186,7 @@ function _should_have_valid_config() {
 
 # CMD ${1} run in container with output checked to match value of ${2}:
 function _has_matching_line() {
-  _run_in_container bash -c "${1} | grep '${2}'"
+  _run_in_container_bash "${1} | grep '${2}'"
   assert_output "${2}"
 }
 
@@ -274,7 +274,7 @@ function _should_be_equal_in_content() {
   local CONTAINER_PATH=${1}
   local LOCAL_PATH=${2}
 
-  _run_in_container /bin/bash -c "cat ${CONTAINER_PATH}"
+  _run_in_container_bash "cat ${CONTAINER_PATH}"
   assert_output "$(cat "${LOCAL_PATH}")"
   assert_success
 }

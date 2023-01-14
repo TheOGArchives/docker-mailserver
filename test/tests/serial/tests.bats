@@ -30,8 +30,8 @@ setup_file() {
 
   # this relies on the checksum file being updated after all changes have been applied
   wait_until_change_detection_event_completes mail
-  wait_for_service mail postfix
-  wait_for_smtp_port_in_container mail
+  _wait_for_service mail postfix
+  _wait_for_smtp_port_in_container mail
 }
 
 teardown_file() {
@@ -378,7 +378,7 @@ EOF
 }
 
 @test "checking accounts: user3 should have been removed from /tmp/docker-mailserver/postfix-accounts.cf but not auser3" {
-  wait_until_account_maildir_exists mail 'user3@domain.tld'
+  _wait_until_account_maildir_exists mail 'user3@domain.tld'
 
   docker exec mail /bin/sh -c "delmailuser -y user3@domain.tld"
 
@@ -584,14 +584,14 @@ EOF
   assert_success
 
   # wait until quota has been updated
-  run repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'doveadm quota get -u user1@localhost.localdomain | grep -oP \"(User quota STORAGE\s+[0-9]+\s+)51200(.*)\"'"
+  run _repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'doveadm quota get -u user1@localhost.localdomain | grep -oP \"(User quota STORAGE\s+[0-9]+\s+)51200(.*)\"'"
   assert_success
 
   run docker exec mail /bin/sh -c "delquota user1@localhost.localdomain"
   assert_success
 
   # wait until quota has been updated
-  run repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'doveadm quota get -u user1@localhost.localdomain | grep -oP \"(User quota STORAGE\s+[0-9]+\s+)-(.*)\"'"
+  run _repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'doveadm quota get -u user1@localhost.localdomain | grep -oP \"(User quota STORAGE\s+[0-9]+\s+)-(.*)\"'"
   assert_success
 }
 
@@ -604,12 +604,12 @@ EOF
   assert_success
 
   # wait until quota has been updated
-  run repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'doveadm quota get -u quotauser@otherdomain.tld | grep -oP \"(User quota STORAGE\s+[0-9]+\s+)10(.*)\"'"
+  run _repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'doveadm quota get -u quotauser@otherdomain.tld | grep -oP \"(User quota STORAGE\s+[0-9]+\s+)10(.*)\"'"
   assert_success
 
   # dovecot and postfix has been restarted
-  wait_for_service mail postfix
-  wait_for_service mail dovecot
+  _wait_for_service mail postfix
+  _wait_for_service mail dovecot
   sleep 10
 
   # send some big emails
@@ -620,10 +620,10 @@ EOF
   run docker exec mail /bin/sh -c "nc 0.0.0.0 25 < /tmp/docker-mailserver-test/email-templates/quota-exceeded.txt"
   assert_success
   # check for quota warn message existence
-  run repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'grep \"Subject: quota warning\" /var/mail/otherdomain.tld/quotauser/new/ -R'"
+  run _repeat_until_success_or_timeout 20 sh -c "docker exec mail sh -c 'grep \"Subject: quota warning\" /var/mail/otherdomain.tld/quotauser/new/ -R'"
   assert_success
 
-  run repeat_until_success_or_timeout 20 sh -c "docker logs mail | grep 'Quota exceeded (mailbox for user is full)'"
+  run _repeat_until_success_or_timeout 20 sh -c "docker logs mail | grep 'Quota exceeded (mailbox for user is full)'"
   assert_success
 
   # ensure only the first big message and the warn message are present (other messages are rejected: mailbox is full)
@@ -679,7 +679,7 @@ EOF
 
 @test "checking spoofing: rejects sender forging" {
   # checking rejection of spoofed sender
-  wait_for_smtp_port_in_container_to_respond mail
+  _wait_for_smtp_port_in_container_to_respond mail
   run docker exec mail /bin/sh -c "nc 0.0.0.0 25 < /tmp/docker-mailserver-test/auth/added-smtp-auth-spoofed.txt"
   assert_output --partial 'Sender address rejected: not owned by user'
 }

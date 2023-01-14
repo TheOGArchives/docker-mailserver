@@ -10,17 +10,17 @@ function setup_file() {
   local CUSTOM_SETUP_ARGUMENTS=(
     --env ENABLE_DNSBL=1
   )
-  init_with_defaults
-  common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
-  wait_for_smtp_port_in_container "${CONTAINER_NAME}"
+  _init_with_defaults
+  _common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
+  _wait_for_smtp_port_in_container "${CONTAINER_NAME}"
 
   local CONTAINER_NAME=${CONTAINER2_NAME}
   local CUSTOM_SETUP_ARGUMENTS=(
     --env ENABLE_DNSBL=0
   )
-  init_with_defaults
-  common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
-  wait_for_smtp_port_in_container "${CONTAINER_NAME}"
+  _init_with_defaults
+  _common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
+  _wait_for_smtp_port_in_container "${CONTAINER_NAME}"
 }
 
 function teardown_file() {

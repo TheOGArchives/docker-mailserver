@@ -106,9 +106,9 @@ function configure_and_run_dms_container() {
     )
   fi
 
-  init_with_defaults
-  common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
-  wait_for_smtp_port_in_container "${CONTAINER_NAME}"
+  _init_with_defaults
+  _common_container_setup 'CUSTOM_SETUP_ARGUMENTS'
+  _wait_for_smtp_port_in_container "${CONTAINER_NAME}"
 }
 
 function should_support_expected_cipherlists() {

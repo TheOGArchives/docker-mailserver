@@ -1,5 +1,4 @@
 load "${REPOSITORY_ROOT}/test/helper/common"
-load "${REPOSITORY_ROOT}/test/helper/setup"
 
 # Tests the `setup.sh` companion script.
 # Only test coverage below is that the config path `-p` and image `-i` options work as intended.
