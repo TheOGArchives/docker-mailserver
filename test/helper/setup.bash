@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# -------------------------------------------------------------------
+# ! ATTENTION: Functions prefixed with `__` are not meant to be called in tests.
+
+# ! -------------------------------------------------------------------
+# ? >> Miscellaneous initialization functionality
 
 function __initialize_variables() {
   function __check_if_set() {
@@ -28,34 +31,39 @@ function __initialize_variables() {
   NUMBER_OF_LOG_LINES=${NUMBER_OF_LOG_LINES:-10}
 }
 
-# -------------------------------------------------------------------
+# ? << Miscellaneous initialization functionality
+# ! -------------------------------------------------------------------
+# ? >> File setup
 
-# @param ${1} relative source in test/config folder
-# @param ${2} (optional) container name, defaults to ${BATS_TEST_FILENAME}
-# @return path to the folder where the config is duplicated
-function duplicate_config_for_container() {
-  local OUTPUT_FOLDER
-  OUTPUT_FOLDER=$(private_config_path "${2}")  || return $?
-
-  rm -rf "${OUTPUT_FOLDER:?}/" || return $? # cleanup
-  mkdir -p "${OUTPUT_FOLDER}" || return $?
-  cp -r "${PWD}/test/config/${1:?}/." "${OUTPUT_FOLDER}" || return $?
-
-  echo "${OUTPUT_FOLDER}"
+# Print the private config path for the given container or test file,
+# if no container name was given.
+#
+# @param ${1} = container name [OPTIONAL]
+function _print_private_config_path() {
+  local TARGET_NAME=${1:-$(basename "${BATS_TEST_FILENAME}")}
+  echo "${REPOSITORY_ROOT}/test/duplicate_configs/${TARGET_NAME}"
 }
 
-# TODO: Should also fail early on "docker logs ${1} | egrep '^[  FATAL  ]'"?
-# @param ${1} name of the postfix container
-function wait_for_finished_setup_in_container() {
-  local STATUS=0
-  repeat_until_success_or_timeout --fatal-test "container_is_running ${1}" "${TEST_TIMEOUT_IN_SECONDS}" sh -c "docker logs ${1} | grep 'is up and running'" || STATUS=1
+# Create a dedicated configuration directory for a test file.
+#
+# @param ${1} = relative source in test/config folder
+# @param ${2} = (optional) container name, defaults to ${BATS_TEST_FILENAME}
+# @return     = path to the folder where the config is duplicated
+function _duplicate_config_for_container() {
+  local OUTPUT_FOLDER
+  OUTPUT_FOLDER=$(_print_private_config_path "${2}")
 
-  if [[ ${STATUS} -eq 1 ]]; then
-    echo "Last ${NUMBER_OF_LOG_LINES} lines of container \`${1}\`'s log"
-    docker logs "${1}" | tail -n "${NUMBER_OF_LOG_LINES}"
+  if [[ -z ${OUTPUT_FOLDER} ]]
+  then
+    echo "'OUTPUT_FOLDER' in '_duplicate_config_for_container' is empty" >&2
+    return 1
   fi
 
-  return ${STATUS}
+  rm -rf "${OUTPUT_FOLDER:?}/"
+  mkdir -p "${OUTPUT_FOLDER}"
+  cp -r "${REPOSITORY_ROOT}/test/config/${1:?}/." "${OUTPUT_FOLDER}" || return $?
+
+  echo "${OUTPUT_FOLDER}"
 }
 
 # Common defaults appropriate for most tests, override vars in each test when necessary.
@@ -63,8 +71,8 @@ function wait_for_finished_setup_in_container() {
 # For individual test override the var via `local` var instead.
 #
 # For example, if you need an immutable config volume that can't be affected by other tests
-# in the file, then use `local TEST_TMP_CONFIG=$(duplicate_config_for_container . "${UNIQUE_ID_HERE}")`
-function init_with_defaults() {
+# in the file, then use `local TEST_TMP_CONFIG=$(_duplicate_config_for_container . "${UNIQUE_ID_HERE}")`
+function _init_with_defaults() {
   __initialize_variables
 
   export TEST_TMP_CONFIG
@@ -73,7 +81,7 @@ function init_with_defaults() {
   # is `${CONTAINER_NAME}` global defined here. It derives the name from the test filename:
   # `basename` to ignore absolute dir path and file extension, only extract filename.
   # In `setup_file()` creates a single copy of the test config folder to use for an entire test file:
-  TEST_TMP_CONFIG=$(duplicate_config_for_container . "${CONTAINER_NAME}")
+  TEST_TMP_CONFIG=$(_duplicate_config_for_container . "${CONTAINER_NAME}")
 
   # Common complimentary test files, read-only safe to share across containers:
   export TEST_FILES_CONTAINER_PATH='/tmp/docker-mailserver-test'
@@ -90,22 +98,39 @@ function init_with_defaults() {
   export TEST_CA_CERT="${TEST_FILES_CONTAINER_PATH}/ssl/example.test/with_ca/ecdsa/ca-cert.ecdsa.pem"
 }
 
-# Using `create` and `start` instead of only `run` allows to modify
-# the container prior to starting it. Otherwise use this combined method.
-# NOTE: Forwards all args to the create method at present.
-function common_container_setup() {
-  common_container_create "${@}"
-  common_container_start
+# ? << File setup
+# ! -------------------------------------------------------------------
+# ? >> Container startup
+
+# Waits until the container has finished starting up.
+#
+# TODO: Should also fail early on "docker logs ${1} | egrep '^[  FATAL  ]'"?
+#
+# @param ${1} name of the postfix container
+function _wait_for_finished_setup_in_container() {
+  local STATUS=0
+  _repeat_until_success_or_timeout \
+    --fatal-test "_container_is_running ${1}" \
+    "${TEST_TIMEOUT_IN_SECONDS}" \
+    bash -c "docker logs ${1} | grep 'is up and running'" || STATUS=1
+
+  if [[ ${STATUS} -eq 1 ]]; then
+    echo "Last ${NUMBER_OF_LOG_LINES} lines of container (${1}) log"
+    docker logs "${1}" | tail -n "${NUMBER_OF_LOG_LINES}"
+  fi
+
+  return "${STATUS}"
 }
 
-# Common docker setup is centralized here.
-#
-# `X_EXTRA_ARGS` - Optional: Pass an array by it's variable name as a string, it will
-# be used as a reference for appending extra config into the `docker create` below:
+# Uses `docker create` to create a container with proper defaults
+# without starting it instantly.
 #
 # NOTE: Using array reference for a single input parameter, as this method is still
 # under development while adapting tests to it and requirements it must serve (eg: support base config matrix in CI)
-function common_container_create() {
+#
+# @param ${1} = Pass an array by it's variable name as a string; it will be used as a
+#               reference for appending extra config into the `docker create` below [OPTIONAL]
+function _common_container_create() {
   [[ -n ${1} ]] && local -n X_EXTRA_ARGS=${1}
 
   run docker create \
@@ -128,9 +153,27 @@ function common_container_create() {
   assert_success
 }
 
-function common_container_start() {
-  run docker start "${CONTAINER_NAME}"
+# Starts a container given by it's name. Uses `CONTAINER_NAME` as the name for the
+# `docker start` command.
+function _common_container_start() {
+  run docker start "${CONTAINER_NAME:?Container name must be set}"
   assert_success
 
-  wait_for_finished_setup_in_container "${CONTAINER_NAME}"
+  _wait_for_finished_setup_in_container "${CONTAINER_NAME}"
+}
+
+# Using `create` and `start` instead of only `run` allows to modify
+# the container prior to starting it. Otherwise use this combined method.
+# NOTE: Forwards all args to the create method at present.
+function _common_container_setup() {
+  _common_container_create "${@}"
+  _common_container_start
+}
+
+# Can be used in BATS# `teardown_file` function as a default value.
+#
+# @param ${1} = container name [OPTIONAL]
+function _default_teardown() {
+  local TARGET_CONTAINER_NAME=${1:-${CONTAINER_NAME}}
+  docker rm -f "${TARGET_CONTAINER_NAME}"
 }

@@ -14,8 +14,8 @@ function _should_succesfully_negotiate_tls() {
   local CA_CERT=${2:-${TEST_CA_CERT}}
 
   # Postfix and Dovecot are ready:
-  wait_for_smtp_port_in_container_to_respond "${CONTAINER_NAME}"
-  wait_for_tcp_port_in_container 993 "${CONTAINER_NAME}"
+  _wait_for_smtp_port_in_container_to_respond "${CONTAINER_NAME}"
+  _wait_for_tcp_port_in_container 993 "${CONTAINER_NAME}"
 
   # Root CA cert should be present in the container:
   assert docker exec "${CONTAINER_NAME}" [ -f "${CA_CERT}" ]
@@ -82,7 +82,7 @@ function _generate_openssl_cmd() {
 
 function _get_fqdn_match_query() {
   local FQDN
-  FQDN=$(escape_fqdn "${1}")
+  FQDN=$(_escape_fqdn "${1}")
 
   # 3rd check is for wildcard support by replacing the 1st DNS label of the FQDN with a `*`,
   # eg: `mail.example.test` will become `*.example.test` matching `DNS:*.example.test`.
@@ -101,7 +101,7 @@ function _should_not_support_fqdn_in_cert() {
 
 # Escapes `*` and `.` so the FQDN literal can be used in regex queries
 # `sed` will match those two chars and `\\&` says to prepend a `\` to the sed match (`&`)
-function escape_fqdn() {
+function _escape_fqdn() {
   # shellcheck disable=SC2001
   sed 's|[\*\.]|\\&|g' <<< "${1}"
 }
